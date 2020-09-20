@@ -14,7 +14,7 @@ impl<'r> Reader<'r> {
     }
 
     pub(crate) fn rewind_last_hook(&mut self) {
-        if let Some(hook) = self.hooks.first() {
+        if let Some(hook) = self.hooks.last() {
             self.position = *hook;
         }
     }
@@ -45,7 +45,7 @@ impl<'r> Reader<'r> {
 
     #[inline]
     pub(crate) fn skip(&mut self, n: usize) {
-        if self.position + n > self.len {
+        if self.position + n >= self.len {
             self.position = self.len - 1;
         } else {
             self.position += n;

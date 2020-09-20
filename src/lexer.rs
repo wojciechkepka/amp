@@ -96,6 +96,14 @@ impl<'r> Lexer<'r> {
             _ => Token::Identifier(ident),
         }
     }
+
+    pub(crate) fn is_last(&self) -> bool {
+        self.reader.is_last()
+    }
+
+    pub(crate) fn rewind(&mut self, n: usize) {
+        self.reader.rewind(n as isize)
+    }
 }
 
 #[cfg(test)]
