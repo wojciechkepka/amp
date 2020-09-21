@@ -11,13 +11,6 @@ impl<'r> Lexer<'r> {
         Lexer { reader: Reader::new(source) }
     }
 
-    pub(crate) fn peek_token(&mut self) -> Token {
-        self.reader.save_hook();
-        let token = self.next_token();
-        self.reader.rewind_last_hook();
-        token
-    }
-
     pub(crate) fn next_token(&mut self) -> Token {
         let token = match self.reader.current() {
             ch @ '{'
@@ -30,6 +23,7 @@ impl<'r> Lexer<'r> {
             | ch @ '+'
             | ch @ ';'
             | ch @ '*'
+            | ch @ '-'
             | ch @ '/' => {
                 self.reader.skip(1);
                 Token::from_char(ch).unwrap()
@@ -38,11 +32,9 @@ impl<'r> Lexer<'r> {
             '<' => self.parse_double_or_single('=', Token::LessThanOrEqual, Token::LessThan),
             '>' => self.parse_double_or_single('=', Token::GreaterThanOrEqual, Token::GreaterThan),
             '=' => self.parse_double_or_single('=', Token::Equal, Token::Assign),
+            _ if self.is_last() => Token::EOF,
             ch if ch.is_ascii_whitespace() => {
                 self.reader.skip_whitespace();
-                if self.reader.is_last() {
-                    return Token::EOF;
-                }
                 self.next_token()
             }
             ch if ch.is_ascii_digit() => self.parse_number(),
@@ -99,10 +91,6 @@ impl<'r> Lexer<'r> {
 
     pub(crate) fn is_last(&self) -> bool {
         self.reader.is_last()
-    }
-
-    pub(crate) fn rewind(&mut self, n: usize) {
-        self.reader.rewind(n as isize)
     }
 }
 

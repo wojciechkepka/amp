@@ -3,6 +3,7 @@ pub mod interactive;
 mod lexer;
 mod parser;
 mod reader;
+pub use parser::{parses_if_else, parses_let_statement, parses_prefix_expression};
 
 use thiserror::Error;
 

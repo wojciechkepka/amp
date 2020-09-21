@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Statement {
     Let { ident: Token, value: Box<Expr> },
@@ -12,28 +14,11 @@ pub enum Expr {
     String(String),
     Boolean(bool),
     Ident(String),
-    Prefix {
-        prefix: Token,
-        value: Box<Expr>,
-    },
-    Infix {
-        left: Box<Expr>,
-        operator: Token,
-        right: Box<Expr>,
-    },
-    If {
-        condition: Box<Expr>,
-        consequence: Vec<Statement>,
-        alternative: Vec<Statement>,
-    },
-    Function {
-        parameters: Vec<String>,
-        body: Vec<Statement>,
-    },
-    Call {
-        function: Box<Expr>,
-        arguments: Vec<Expr>,
-    },
+    Prefix { prefix: Token, value: Box<Expr> },
+    Infix { left: Box<Expr>, operator: Token, right: Box<Expr> },
+    If { condition: Box<Expr>, consequence: Vec<Statement>, alternative: Vec<Statement> },
+    Function { parameters: Vec<String>, body: Vec<Statement> },
+    Call { function: Box<Expr>, arguments: Vec<Expr> },
     Unknown,
 }
 
@@ -98,6 +83,7 @@ pub enum Token {
     GreaterThanOrEqual,
 
     EOF,
+    Null,
     Invalid(String),
 
     Integer(u64),
@@ -132,6 +118,7 @@ impl ToString for Token {
             Token::Keyword(kw) => kw.to_string(),
             Token::EOF => "".to_string(),
             Token::Invalid(s) => format!("<invalid=\"{}\"", s),
+            Token::Null => "".to_string(),
         }
     }
 }
@@ -153,6 +140,7 @@ impl Token {
             '/' => Some(Token::Slash),
             '<' => Some(Token::LessThan),
             '>' => Some(Token::GreaterThan),
+            '-' => Some(Token::Minus),
             _ => None,
         }
     }

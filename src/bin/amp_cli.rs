@@ -1,5 +1,5 @@
-use amp::interactive::AmpCli;
+use amp;
 
 fn main() {
-    AmpCli::run()
+    amp::interactive::AmpCli::run()
 }
