@@ -1,5 +1,5 @@
 #[derive(Debug, PartialEq, Clone)]
-pub(crate) enum Statement {
+pub enum Statement {
     Let { ident: Token, value: Box<Expr> },
     Expression(Box<Expr>),
     Return { value: Box<Expr> },
@@ -7,21 +7,38 @@ pub(crate) enum Statement {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub(crate) enum Expr {
+pub enum Expr {
     Const(u64),
     String(String),
     Boolean(bool),
     Ident(String),
-    Prefix { prefix: Token, value: Box<Expr> },
-    Infix { left: Box<Expr>, operator: Token, right: Box<Expr> },
-    If { condition: Box<Expr>, consequence: Vec<Statement>, alternative: Vec<Statement> },
-    Function { parameters: Vec<String>, body: Vec<Statement> },
-    Call { function: Box<Expr>, arguments: Vec<Expr> },
+    Prefix {
+        prefix: Token,
+        value: Box<Expr>,
+    },
+    Infix {
+        left: Box<Expr>,
+        operator: Token,
+        right: Box<Expr>,
+    },
+    If {
+        condition: Box<Expr>,
+        consequence: Vec<Statement>,
+        alternative: Vec<Statement>,
+    },
+    Function {
+        parameters: Vec<String>,
+        body: Vec<Statement>,
+    },
+    Call {
+        function: Box<Expr>,
+        arguments: Vec<Expr>,
+    },
     Unknown,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub(crate) enum EKeyword {
+pub enum EKeyword {
     Function,
     Let,
     If,
@@ -46,7 +63,7 @@ impl ToString for EKeyword {
 }
 
 #[derive(PartialOrd, PartialEq)]
-pub(crate) enum Precedence {
+pub enum Precedence {
     Lowest,
     Equals,      // ==
     LessGreater, // > or <
@@ -56,7 +73,7 @@ pub(crate) enum Precedence {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub(crate) enum Token {
+pub enum Token {
     RightCurlyBrace,
     LeftCurlyBrace,
     RightSquareBrace,
@@ -119,7 +136,7 @@ impl ToString for Token {
     }
 }
 impl Token {
-    pub(crate) fn from_char(ch: char) -> Option<Token> {
+    pub fn from_char(ch: char) -> Option<Token> {
         match ch {
             '{' => Some(Token::LeftCurlyBrace),
             '}' => Some(Token::RightCurlyBrace),
@@ -140,7 +157,7 @@ impl Token {
         }
     }
 
-    pub(crate) fn precedence(&self) -> Precedence {
+    pub fn precedence(&self) -> Precedence {
         match self {
             Token::Plus => Precedence::Sum,
             Token::Minus => Precedence::Sum,
@@ -156,7 +173,7 @@ impl Token {
         }
     }
 
-    pub(crate) fn literal(&self) -> String {
+    pub fn literal(&self) -> String {
         self.to_string()
     }
 }

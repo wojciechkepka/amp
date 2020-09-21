@@ -1,44 +1,72 @@
 use super::{
     ast::{EKeyword, Expr, Precedence, Statement, Token},
     lexer::Lexer,
+    AmpError,
 };
 
-pub(crate) fn parse_program(src: &str) -> Vec<Statement> {
+pub(crate) fn parse_program(src: &str) -> Result<Vec<Statement>, AmpError> {
     let mut p = Parser::new(src);
     let statements = p.parse();
-    for error in p.errors {
-        eprintln!("error: {}", error);
-    }
-
     statements
 }
 
 struct Parser<'s> {
     lexer: Lexer<'s>,
-    errors: Vec<String>,
+    current: Token,
+    peek: Token,
 }
 impl<'s> Parser<'s> {
     fn new(source: &'s str) -> Parser<'s> {
-        Parser { lexer: Lexer::new(source), errors: Vec::new() }
+        Parser {
+            lexer: Lexer::new(source),
+            current: Token::EOF,
+            peek: Token::EOF,
+        }
+    }
+    fn expect(&mut self, first: &Token, second: &Token) -> Result<(), AmpError> {
+        if first != second {
+            return Err(AmpError::InvalidToken(first.clone(), second.clone()));
+        }
+
+        Ok(())
     }
 
-    fn parse(&mut self) -> Vec<Statement> {
+    fn expect_current(&mut self, token: &Token) -> Result<(), AmpError> {
+        self.expect(&self.current.clone(), &token)
+    }
+
+    fn expect_peek(&mut self, token: &Token) -> Result<(), AmpError> {
+        self.expect(&self.peek.clone(), &token)
+    }
+
+    fn next(&mut self) {
+        dbg!(&self.current);
+        self.current = self.lexer.next_token();
+        dbg!(&self.current);
+        self.peek = self.lexer.peek_token();
+        dbg!(&self.peek);
+    }
+
+    fn parse(&mut self) -> Result<Vec<Statement>, AmpError> {
         dbg!("parse");
         let mut stmts = Vec::new();
+        dbg!(format!("{:?}", self.current));
         loop {
-            let next = self.lexer.next_token();
-            dbg!(&next);
-            let statement = match next {
-                Token::Keyword(EKeyword::Let) => self.parse_let_statement(),
-                Token::Keyword(EKeyword::Return) => self.parse_return_statement(),
-                Token::Keyword(EKeyword::Else) | Token::RightCurlyBrace | Token::EOF => break,
+            self.next();
+            let statement = match self.current.clone() {
+                Token::Keyword(EKeyword::Let) => self.parse_let_statement()?,
+                Token::Keyword(EKeyword::Return) => self.parse_return_statement()?,
+                Token::EOF => break,
+                rewind @ Token::Keyword(EKeyword::Else) | rewind @ Token::RightCurlyBrace => {
+                    self.lexer.rewind(self.current.literal().len());
+                    self.current = rewind.clone();
+                    self.peek = self.lexer.peek_token();
+                    dbg!(&self.current);
+                    break;
+                }
                 _ => {
-                    self.lexer.rewind(next.literal().len());
-                    if let Some(expr) = self.parse_expr(Precedence::Lowest) {
-                        return Statement::Expression(Box::new(expr));
-                    } else {
-                        break;
-                    }
+                    self.lexer.rewind(self.current.literal().len());
+                    Statement::Expression(Box::new(self.parse_expr(Precedence::Lowest)?))
                 }
             };
 
@@ -51,125 +79,99 @@ impl<'s> Parser<'s> {
             }
         }
 
-        stmts
+        Ok(stmts)
     }
 
-    fn check_semi_colon(&mut self) {
-        let semi_colon = self.lexer.next_token();
-        dbg!(&semi_colon);
-        if semi_colon != Token::SemiColon {
-            self.add_error(format!("missing semicolon after expression"));
+    fn parse_let_statement(&mut self) -> Result<Statement, AmpError> {
+        self.next();
+        let mut ident = String::new();
+        if let Token::Identifier(name) = self.current.clone() {
+            ident = name;
+        } else {
+            return Err(AmpError::InvalidToken(
+                self.current.clone(),
+                Token::Identifier("".to_string()),
+            ));
         }
+        self.expect_peek(&Token::Assign)?;
+        self.next();
+
+        let expr = self.parse_expr(Precedence::Lowest)?;
+        self.expect_peek(&Token::SemiColon)?;
+        self.next();
+
+        Ok(Statement::Let {
+            ident: Token::Identifier(ident),
+            value: Box::new(expr),
+        })
     }
 
-    fn add_error(&mut self, err: String) {
-        self.errors.push(err);
+    fn parse_return_statement(&mut self) -> Result<Statement, AmpError> {
+        let expr = self.parse_expr(Precedence::Lowest)?;
+        self.expect_peek(&Token::SemiColon)?;
+        self.next();
+        Ok(Statement::Return {
+            value: Box::new(expr),
+        })
     }
 
-    fn parse_let_statement(&mut self) -> Statement {
-        let ident = self.lexer.next_token();
-        let assign = self.lexer.next_token();
-        dbg!(&ident);
-        dbg!(&assign);
-        match ident {
-            Token::Identifier(name) => match assign {
-                Token::Assign => {
-                    if let Some(expr) = self.parse_expr(Precedence::Lowest) {
-                        self.check_semi_colon();
-                        return Statement::Let { ident: Token::Identifier(name), value: Box::new(expr) };
-                    }
-                }
-                t => self.add_error(format!("invalid token {:?} as assignment operator in let statement", t)),
+    fn parse_if_expr(&mut self) -> Result<Expr, AmpError> {
+        self.expect_peek(&Token::LeftParenthesis)?;
+        self.next();
+        let condition = self.parse_expr(Precedence::Lowest);
+        self.expect_peek(&Token::RightParenthesis)?;
+        self.next();
+        let consequence = self.parse_curly_block()?;
+        dbg!("here");
+        let alternative = if self.current == Token::Keyword(EKeyword::Else) {
+            self.next();
+            self.parse_curly_block()?
+        } else {
+            Vec::new()
+        };
+
+        Ok(Expr::If {
+            condition: Box::new(condition?),
+            consequence,
+            alternative,
+        })
+    }
+
+    fn parse_curly_block(&mut self) -> Result<Vec<Statement>, AmpError> {
+        self.expect_peek(&Token::LeftCurlyBrace)?;
+        self.next();
+        dbg!(format!("here {:?}", &self.current));
+        let out = self.parse();
+        self.expect_peek(&Token::RightCurlyBrace)?;
+        self.next();
+        Ok(out?)
+    }
+
+    fn parse_expr(&mut self, precedence: Precedence) -> Result<Expr, AmpError> {
+        self.next();
+        let expr = match self.current.clone() {
+            Token::Integer(n) => Expr::Const(n),
+            Token::Keyword(EKeyword::True) => Expr::Boolean(true),
+            Token::Keyword(EKeyword::False) => Expr::Boolean(false),
+            Token::Identifier(s) => Expr::Ident(s),
+            Token::Bang => Expr::Prefix {
+                prefix: Token::Bang,
+                value: Box::new(self.parse_expr(Precedence::Prefix)?),
             },
-            t => self.add_error(format!("invalid token {:?} as identifier name in let statement", t)),
-        }
-        Statement::Empty
-    }
-
-    fn parse_return_statement(&mut self) -> Statement {
-        if let Some(expr) = self.parse_expr(Precedence::Lowest) {
-            self.check_semi_colon();
-            return Statement::Return { value: Box::new(expr) };
-        }
-
-        self.add_error("missing expression after return keyword".to_string());
-        Statement::Empty
-    }
-
-    fn parse_if_expr(&mut self) -> Option<Expr> {
-        dbg!("gothere");
-        match self.lexer.next_token() {
-            Token::LeftParenthesis => {
-                let condition = self.parse_expr(Precedence::Lowest);
-                match self.lexer.next_token() {
-                    Token::RightParenthesis => {
-                        let consequence = self.parse_curly_block();
-                        dbg!("here?");
-                        match self.lexer.next_token() {
-                            Token::RightCurlyBrace => {
-                                dbg!(self.lexer.peek_token());
-                                let alternative = if self.lexer.next_token() == Token::Keyword(EKeyword::Else) {
-                                    self.parse_curly_block()
-                                } else {
-                                    dbg!(self.lexer.peek_token());
-                                    Vec::new()
-                                };
-
-                                Some(Expr::If { condition: Box::new(condition?), consequence, alternative })
-                            }
-                            _ => None,
-                        }
-                    }
-                    _ => None,
-                }
-            }
-            _ => None,
-        }
-    }
-
-    fn parse_curly_block(&mut self) -> Vec<Statement> {
-        let block = self.lexer.next_token();
-        dbg!(&block);
-        match block {
+            Token::Minus => Expr::Prefix {
+                prefix: Token::Minus,
+                value: Box::new(self.parse_expr(Precedence::Prefix)?),
+            },
             Token::LeftCurlyBrace => {
-                let out = self.parse();
-                dbg!(self.lexer.peek_token());
-                if self.lexer.next_token() != Token::RightCurlyBrace {
-                    dbg!("Error!");
-                }
-                out
+                self.next();
+                self.parse_expr(Precedence::Lowest)?
             }
-            t => {
-                self.add_error(format!("invalid token, expected '{{' found {:?}", t));
-                Vec::new()
-            }
-        }
-    }
-
-    fn parse_expr(&mut self, precedence: Precedence) -> Option<Expr> {
-        let xt = self.lexer.next_token();
-        dbg!(&xt);
-        let expr = match xt {
-            Token::Integer(n) => Some(Expr::Const(n)),
-            Token::Keyword(EKeyword::True) => Some(Expr::Boolean(true)),
-            Token::Keyword(EKeyword::False) => Some(Expr::Boolean(false)),
-            Token::Identifier(s) => Some(Expr::Ident(s)),
-            Token::Bang => {
-                Some(Expr::Prefix { prefix: Token::Bang, value: Box::new(self.parse_expr(Precedence::Prefix)?) })
-            }
-            Token::Minus => {
-                Some(Expr::Prefix { prefix: Token::Minus, value: Box::new(self.parse_expr(Precedence::Prefix)?) })
-            }
-            Token::LeftCurlyBrace => {
-                self.lexer.next_token();
-                self.parse_expr(Precedence::Lowest)
-            }
-            Token::Keyword(EKeyword::If) => self.parse_if_expr(),
-            _ => Some(Expr::Unknown),
+            Token::Keyword(EKeyword::If) => self.parse_if_expr()?,
+            _ => Expr::Unknown,
         };
         dbg!(&expr);
 
-        expr
+        Ok(expr)
     }
 }
 
@@ -182,13 +184,22 @@ mod tests {
 let is_true = true;
 let is_false = false;";
         let expected = vec![
-            Statement::Let { ident: Token::Identifier("var".to_string()), value: Box::new(Expr::Const(5)) },
-            Statement::Let { ident: Token::Identifier("is_true".to_string()), value: Box::new(Expr::Boolean(true)) },
-            Statement::Let { ident: Token::Identifier("is_false".to_string()), value: Box::new(Expr::Boolean(false)) },
+            Statement::Let {
+                ident: Token::Identifier("var".to_string()),
+                value: Box::new(Expr::Const(5)),
+            },
+            Statement::Let {
+                ident: Token::Identifier("is_true".to_string()),
+                value: Box::new(Expr::Boolean(true)),
+            },
+            Statement::Let {
+                ident: Token::Identifier("is_false".to_string()),
+                value: Box::new(Expr::Boolean(false)),
+            },
         ];
         let mut parser = Parser::new(code);
 
-        assert_eq!(parser.parse(), expected);
+        assert_eq!(parser.parse(), Ok(expected));
     }
 
     #[test]
@@ -200,11 +211,15 @@ let is_false = false;";
     }";
         let expected = vec![Statement::Expression(Box::new(Expr::If {
             condition: Box::new(Expr::Ident("x".to_string())),
-            consequence: vec![Statement::Return { value: Box::new(Expr::Const(15)) }],
-            alternative: vec![Statement::Return { value: Box::new(Expr::Const(30)) }],
+            consequence: vec![Statement::Return {
+                value: Box::new(Expr::Const(15)),
+            }],
+            alternative: vec![Statement::Return {
+                value: Box::new(Expr::Const(30)),
+            }],
         }))];
         let mut parser = Parser::new(code);
 
-        assert_eq!(parser.parse(), expected);
+        assert_eq!(parser.parse(), Ok(expected));
     }
 }
