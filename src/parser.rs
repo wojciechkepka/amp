@@ -37,7 +37,11 @@ struct Parser<'s> {
 }
 impl<'s> Parser<'s> {
     fn new(source: &'s str) -> Parser<'s> {
-        Parser { lexer: Lexer::new(source), current: Token::Null, peek: Token::Null }
+        Parser {
+            lexer: Lexer::new(source),
+            current: Token::Null,
+            peek: Token::Null,
+        }
     }
     fn expect(&mut self, first: &Token, second: &Token) -> Result<(), AmpError> {
         if first != second {
@@ -107,7 +111,10 @@ impl<'s> Parser<'s> {
         if let Token::Identifier(name) = self.current.clone() {
             ident = name;
         } else {
-            return Err(AmpError::InvalidToken(self.current.clone(), Token::Identifier("".to_string())));
+            return Err(AmpError::InvalidToken(
+                self.current.clone(),
+                Token::Identifier("".to_string()),
+            ));
         }
         self.expect_peek(&Token::Assign)?;
         self.next();
@@ -118,7 +125,10 @@ impl<'s> Parser<'s> {
         self.next();
         ldebug!(format!("end `{}`", self.dbg()));
 
-        Ok(Statement::Let { ident: Token::Identifier(ident), value: Box::new(expr) })
+        Ok(Statement::Let {
+            ident: Token::Identifier(ident),
+            value: Box::new(expr),
+        })
     }
 
     fn parse_return_statement(&mut self) -> Result<Statement, AmpError> {
@@ -143,10 +153,17 @@ impl<'s> Parser<'s> {
         ldebug!(format!("parsing consequence `{}`", self.dbg()));
         let consequence = self.parse_curly_block()?;
         ldebug!(format!("parsing alternative `{}`", self.dbg()));
-        let alternative =
-            if self.current == Token::Keyword(EKeyword::Else) { self.parse_curly_block()? } else { Vec::new() };
+        let alternative = if self.current == Token::Keyword(EKeyword::Else) {
+            self.parse_curly_block()?
+        } else {
+            Vec::new()
+        };
 
-        Ok(Expr::If { condition: Box::new(condition?), consequence, alternative })
+        Ok(Expr::If {
+            condition: Box::new(condition?),
+            consequence,
+            alternative,
+        })
     }
 
     fn parse_curly_block(&mut self) -> Result<Vec<Statement>, AmpError> {
@@ -166,7 +183,10 @@ impl<'s> Parser<'s> {
         self.next();
         let value = self.parse_expr(Precedence::Prefix)?;
         ldebug!(format!("[{}] out - '{:?}'", function_name!(), &value));
-        Ok(Expr::Prefix { prefix, value: Box::new(value) })
+        Ok(Expr::Prefix {
+            prefix,
+            value: Box::new(value),
+        })
     }
 
     fn parse_expr(&mut self, precedence: Precedence) -> Result<Expr, AmpError> {
@@ -198,8 +218,12 @@ pub fn parses_if_else() {
     }";
     let expected = vec![Statement::Expression(Box::new(Expr::If {
         condition: Box::new(Expr::Ident("x".to_string())),
-        consequence: vec![Statement::Return { value: Box::new(Expr::Const(15)) }],
-        alternative: vec![Statement::Return { value: Box::new(Expr::Const(30)) }],
+        consequence: vec![Statement::Return {
+            value: Box::new(Expr::Const(15)),
+        }],
+        alternative: vec![Statement::Return {
+            value: Box::new(Expr::Const(30)),
+        }],
     }))];
     let mut parser = Parser::new(code);
 
@@ -210,9 +234,18 @@ pub fn parses_let_statement() {
 let is_true = true;
 let is_false = false;";
     let expected = vec![
-        Statement::Let { ident: Token::Identifier("var".to_string()), value: Box::new(Expr::Const(5)) },
-        Statement::Let { ident: Token::Identifier("is_true".to_string()), value: Box::new(Expr::Boolean(true)) },
-        Statement::Let { ident: Token::Identifier("is_false".to_string()), value: Box::new(Expr::Boolean(false)) },
+        Statement::Let {
+            ident: Token::Identifier("var".to_string()),
+            value: Box::new(Expr::Const(5)),
+        },
+        Statement::Let {
+            ident: Token::Identifier("is_true".to_string()),
+            value: Box::new(Expr::Boolean(true)),
+        },
+        Statement::Let {
+            ident: Token::Identifier("is_false".to_string()),
+            value: Box::new(Expr::Boolean(false)),
+        },
     ];
     let mut parser = Parser::new(code);
 
@@ -224,8 +257,14 @@ pub fn parses_prefix_expression() {
             !true;
             ";
     let expected = vec![
-        Statement::Expression(Box::new(Expr::Prefix { prefix: Token::Minus, value: Box::new(Expr::Const(1000)) })),
-        Statement::Expression(Box::new(Expr::Prefix { prefix: Token::Bang, value: Box::new(Expr::Boolean(true)) })),
+        Statement::Expression(Box::new(Expr::Prefix {
+            prefix: Token::Minus,
+            value: Box::new(Expr::Const(1000)),
+        })),
+        Statement::Expression(Box::new(Expr::Prefix {
+            prefix: Token::Bang,
+            value: Box::new(Expr::Boolean(true)),
+        })),
     ];
     let mut parser = Parser::new(code);
 
@@ -241,9 +280,18 @@ mod tests {
 let is_true = true;
 let is_false = false;";
         let expected = vec![
-            Statement::Let { ident: Token::Identifier("var".to_string()), value: Box::new(Expr::Const(5)) },
-            Statement::Let { ident: Token::Identifier("is_true".to_string()), value: Box::new(Expr::Boolean(true)) },
-            Statement::Let { ident: Token::Identifier("is_false".to_string()), value: Box::new(Expr::Boolean(false)) },
+            Statement::Let {
+                ident: Token::Identifier("var".to_string()),
+                value: Box::new(Expr::Const(5)),
+            },
+            Statement::Let {
+                ident: Token::Identifier("is_true".to_string()),
+                value: Box::new(Expr::Boolean(true)),
+            },
+            Statement::Let {
+                ident: Token::Identifier("is_false".to_string()),
+                value: Box::new(Expr::Boolean(false)),
+            },
         ];
         let mut parser = Parser::new(code);
 
@@ -260,8 +308,12 @@ let is_false = false;";
 ";
         let expected = vec![Statement::Expression(Box::new(Expr::If {
             condition: Box::new(Expr::Ident("x".to_string())),
-            consequence: vec![Statement::Return { value: Box::new(Expr::Const(15)) }],
-            alternative: vec![Statement::Return { value: Box::new(Expr::Const(30)) }],
+            consequence: vec![Statement::Return {
+                value: Box::new(Expr::Const(15)),
+            }],
+            alternative: vec![Statement::Return {
+                value: Box::new(Expr::Const(30)),
+            }],
         }))];
         let mut parser = Parser::new(code);
 
@@ -284,7 +336,10 @@ let is_false = false;";
     }
     ";
         let expected = vec![Statement::Expression(Box::new(Expr::If {
-            condition: Box::new(Expr::Prefix { prefix: Token::Bang, value: Box::new(Expr::Ident("x".to_string())) }),
+            condition: Box::new(Expr::Prefix {
+                prefix: Token::Bang,
+                value: Box::new(Expr::Ident("x".to_string())),
+            }),
             consequence: vec![
                 Statement::Let {
                     ident: Token::Identifier("z".to_string()),
@@ -296,7 +351,10 @@ let is_false = false;";
                 },
                 Statement::Let {
                     ident: Token::Identifier("z".to_string()),
-                    value: Box::new(Expr::Prefix { prefix: Token::Minus, value: Box::new(Expr::Const(1000)) }),
+                    value: Box::new(Expr::Prefix {
+                        prefix: Token::Minus,
+                        value: Box::new(Expr::Const(1000)),
+                    }),
                 },
                 Statement::Let {
                     ident: Token::Identifier("y".to_string()),
@@ -309,7 +367,10 @@ let is_false = false;";
             alternative: vec![
                 Statement::Let {
                     ident: Token::Identifier("z".to_string()),
-                    value: Box::new(Expr::Prefix { prefix: Token::Minus, value: Box::new(Expr::Const(1000)) }),
+                    value: Box::new(Expr::Prefix {
+                        prefix: Token::Minus,
+                        value: Box::new(Expr::Const(1000)),
+                    }),
                 },
                 Statement::Let {
                     ident: Token::Identifier("y".to_string()),
@@ -320,7 +381,10 @@ let is_false = false;";
                 },
                 Statement::Let {
                     ident: Token::Identifier("z".to_string()),
-                    value: Box::new(Expr::Prefix { prefix: Token::Minus, value: Box::new(Expr::Const(1000)) }),
+                    value: Box::new(Expr::Prefix {
+                        prefix: Token::Minus,
+                        value: Box::new(Expr::Const(1000)),
+                    }),
                 },
                 Statement::Let {
                     ident: Token::Identifier("y".to_string()),
@@ -343,8 +407,14 @@ let is_false = false;";
             !true;
             ";
         let expected = vec![
-            Statement::Expression(Box::new(Expr::Prefix { prefix: Token::Minus, value: Box::new(Expr::Const(1000)) })),
-            Statement::Expression(Box::new(Expr::Prefix { prefix: Token::Bang, value: Box::new(Expr::Boolean(true)) })),
+            Statement::Expression(Box::new(Expr::Prefix {
+                prefix: Token::Minus,
+                value: Box::new(Expr::Const(1000)),
+            })),
+            Statement::Expression(Box::new(Expr::Prefix {
+                prefix: Token::Bang,
+                value: Box::new(Expr::Boolean(true)),
+            })),
         ];
         let mut parser = Parser::new(code);
 

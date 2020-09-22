@@ -5,7 +5,11 @@ pub(crate) struct Reader<'r> {
 }
 impl<'r> Reader<'r> {
     pub(crate) fn new(text: &'r str) -> Self {
-        Reader { inner: text.as_bytes(), position: 0, len: text.len() }
+        Reader {
+            inner: text.as_bytes(),
+            position: 0,
+            len: text.len(),
+        }
     }
 
     #[inline]

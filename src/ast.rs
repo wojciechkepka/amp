@@ -14,11 +14,28 @@ pub enum Expr {
     String(String),
     Boolean(bool),
     Ident(String),
-    Prefix { prefix: Token, value: Box<Expr> },
-    Infix { left: Box<Expr>, operator: Token, right: Box<Expr> },
-    If { condition: Box<Expr>, consequence: Vec<Statement>, alternative: Vec<Statement> },
-    Function { parameters: Vec<String>, body: Vec<Statement> },
-    Call { function: Box<Expr>, arguments: Vec<Expr> },
+    Prefix {
+        prefix: Token,
+        value: Box<Expr>,
+    },
+    Infix {
+        left: Box<Expr>,
+        operator: Token,
+        right: Box<Expr>,
+    },
+    If {
+        condition: Box<Expr>,
+        consequence: Vec<Statement>,
+        alternative: Vec<Statement>,
+    },
+    Function {
+        parameters: Vec<String>,
+        body: Vec<Statement>,
+    },
+    Call {
+        function: Box<Expr>,
+        arguments: Vec<Expr>,
+    },
     Unknown,
 }
 

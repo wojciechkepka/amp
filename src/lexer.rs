@@ -8,7 +8,9 @@ pub(crate) struct Lexer<'r> {
 }
 impl<'r> Lexer<'r> {
     pub(crate) fn new(source: &'r str) -> Lexer<'r> {
-        Lexer { reader: Reader::new(source) }
+        Lexer {
+            reader: Reader::new(source),
+        }
     }
 
     pub(crate) fn next_token(&mut self) -> Token {
