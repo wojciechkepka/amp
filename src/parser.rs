@@ -3,6 +3,7 @@ use super::{
     lexer::Lexer,
     AmpError,
 };
+use log::debug;
 
 pub(crate) fn parse_program(src: &str) -> Result<Vec<Statement>, AmpError> {
     let mut p = Parser::new(src);
@@ -21,6 +22,12 @@ macro_rules! function_name {
         // `3` is the length of the `::f`.
         &name[..name.len() - 3]
     }};
+}
+
+macro_rules! ldebug {
+    ($msg:expr) => {
+        debug!("[{}:{}] {}", function_name!(), line!(), $msg);
+    };
 }
 
 struct Parser<'s> {
@@ -50,21 +57,20 @@ impl<'s> Parser<'s> {
     }
 
     fn expect_peek(&mut self, token: &Token) -> Result<(), AmpError> {
-        println!("got '{:?}', expecting peek '{:?}'", &self.peek, &token);
+        ldebug!(format!("got '{:?}', expecting peek '{:?}'", &self.peek, &token));
         self.expect(&self.peek.clone(), &token)
     }
 
     fn next(&mut self) {
-        println!("[{}] before {}", function_name!(), self.dbg());
         std::mem::swap(&mut self.peek, &mut self.current);
         self.peek = self.lexer.next_token();
-        println!("[{}] after {}", function_name!(), self.dbg());
+        ldebug!(format!("after `{}`", self.dbg()));
     }
 
     fn parse(&mut self) -> Result<Vec<Statement>, AmpError> {
         let mut stmts = Vec::new();
         loop {
-            println!("[{}] {}", function_name!(), self.dbg());
+            ldebug!(format!("begin `{}`", self.dbg()));
             let statement = match self.current.clone() {
                 Token::Keyword(EKeyword::Let) => self.parse_let_statement()?,
                 Token::Keyword(EKeyword::Return) => self.parse_return_statement()?,
@@ -72,10 +78,9 @@ impl<'s> Parser<'s> {
                     break;
                 }
                 Token::Keyword(EKeyword::Else) | Token::RightCurlyBrace => {
-                    println!("breaking!");
                     break;
                 }
-                Token::Null => {
+                Token::SemiColon | Token::Null => {
                     self.next();
                     continue;
                 }
@@ -96,7 +101,7 @@ impl<'s> Parser<'s> {
 
     #[allow(unused_assignments)]
     fn parse_let_statement(&mut self) -> Result<Statement, AmpError> {
-        println!("[{}] {}", function_name!(), self.dbg());
+        ldebug!(format!("begin `{}`", self.dbg()));
         self.next();
         let mut ident = String::new();
         if let Token::Identifier(name) = self.current.clone() {
@@ -111,65 +116,61 @@ impl<'s> Parser<'s> {
         let expr = self.parse_expr(Precedence::Lowest)?;
         self.expect_peek(&Token::SemiColon)?;
         self.next();
+        ldebug!(format!("end `{}`", self.dbg()));
 
         Ok(Statement::Let { ident: Token::Identifier(ident), value: Box::new(expr) })
     }
 
     fn parse_return_statement(&mut self) -> Result<Statement, AmpError> {
-        println!("[{}] {}", function_name!(), self.dbg());
+        ldebug!(format!("begin `{}`", self.dbg()));
         self.next();
         let expr = self.parse_expr(Precedence::Lowest)?;
         self.expect_peek(&Token::SemiColon)?;
         self.next();
+        ldebug!(format!("end `{}`", self.dbg()));
         Ok(Statement::Return { value: Box::new(expr) })
     }
 
     fn parse_if_expr(&mut self) -> Result<Expr, AmpError> {
-        println!("[{}] {}", function_name!(), self.dbg());
+        ldebug!(format!("begin `{}`", self.dbg()));
         self.expect_peek(&Token::LeftParenthesis)?;
         self.next();
         self.next();
-        println!("[{}] parsing condition {}", function_name!(), self.dbg());
+        ldebug!(format!("parsing condition `{}`", self.dbg()));
         let condition = self.parse_expr(Precedence::Lowest);
         self.expect_peek(&Token::RightParenthesis)?;
         self.next();
-        println!("[{}] parsing consequence {}", function_name!(), self.dbg());
+        ldebug!(format!("parsing consequence `{}`", self.dbg()));
         let consequence = self.parse_curly_block()?;
-        println!("[{}] parsing alternative {}", function_name!(), self.dbg());
-        let alternative = if self.current == Token::Keyword(EKeyword::Else) {
-            println!("gothere");
-            self.parse_curly_block()?
-        } else {
-            Vec::new()
-        };
+        ldebug!(format!("parsing alternative `{}`", self.dbg()));
+        let alternative =
+            if self.current == Token::Keyword(EKeyword::Else) { self.parse_curly_block()? } else { Vec::new() };
 
         Ok(Expr::If { condition: Box::new(condition?), consequence, alternative })
     }
 
     fn parse_curly_block(&mut self) -> Result<Vec<Statement>, AmpError> {
-        println!("[{}] {}", function_name!(), self.dbg());
+        ldebug!(format!("begin `{}`", self.dbg()));
         self.expect_peek(&Token::LeftCurlyBrace)?;
         self.next();
         self.next();
         let out = self.parse();
-        println!("[{}] {}", function_name!(), self.dbg());
+        ldebug!(format!("after parse `{}`", self.dbg()));
         self.next();
-        println!("[{}] out - '{:?}'", function_name!(), &out);
+        ldebug!(format!("[{}] out - '{:?}'", function_name!(), &out));
         Ok(out?)
     }
 
     fn parse_prefix_expr(&mut self, prefix: Token) -> Result<Expr, AmpError> {
-        println!("[{}] {}", function_name!(), self.dbg());
+        ldebug!(format!("begin `{}`", self.dbg()));
         self.next();
         let value = self.parse_expr(Precedence::Prefix)?;
-        self.expect_peek(&Token::SemiColon)?;
-        self.next();
-        println!("[{}] out - '{:?}'", function_name!(), &value);
+        ldebug!(format!("[{}] out - '{:?}'", function_name!(), &value));
         Ok(Expr::Prefix { prefix, value: Box::new(value) })
     }
 
     fn parse_expr(&mut self, precedence: Precedence) -> Result<Expr, AmpError> {
-        println!("[{}] {}", function_name!(), self.dbg());
+        ldebug!(format!("begin `{}`", self.dbg()));
         let expr = match self.current.clone() {
             Token::Integer(n) => Expr::Const(n),
             Token::Keyword(EKeyword::True) => Expr::Boolean(true),
@@ -183,8 +184,8 @@ impl<'s> Parser<'s> {
             Token::Keyword(EKeyword::If) => self.parse_if_expr()?,
             t => panic!("Unknown token {:?}", t),
         };
-        println!("[{}] out - '{:?}'", function_name!(), &expr);
-        println!("[{}] {}", function_name!(), self.dbg());
+        ldebug!(format!("[{}] out - '{:?}'", function_name!(), &expr));
+        ldebug!(format!("end `{}`", self.dbg()));
         Ok(expr)
     }
 }
@@ -267,37 +268,73 @@ let is_false = false;";
         assert_eq!(parser.parse(), Ok(expected));
     }
 
-    //#[test]
-    //fn parses_if_else_multiple_statements() {
-    //let code = "
-    //if (!x) {
-    //let y = -1000;
-    //let z = y;
-    //} else {
-    // !x;
-    //}
-    //";
-    //let expected = vec![Statement::Expression(Box::new(Expr::If {
-    //condition: Box::new(Expr::Prefix { prefix: Token::Bang, value: Box::new(Expr::Ident("x".to_string())) }),
-    //consequence: vec![
-    //Statement::Let {
-    //ident: Token::Identifier("y".to_string()),
-    //value: Box::new(Expr::Prefix { prefix: Token::Minus, value: Box::new(Expr::Const(1000)) }),
-    //},
-    //Statement::Let {
-    //ident: Token::Identifier("z".to_string()),
-    //value: Box::new(Expr::Ident("y".to_string())),
-    //},
-    //],
-    //alternative: vec![Statement::Expression(Box::new(Expr::Prefix {
-    //prefix: Token::Bang,
-    //value: Box::new(Expr::Ident("x".to_string())),
-    //}))],
-    //}))];
-    //let mut parser = Parser::new(code);
+    #[test]
+    fn parses_if_else_multiple_statements() {
+        let code = "
+    if (!x) {
+    let z = y;
+    let y = x;
+    let z = -1000;
+    let y = !x;
+    } else {
+    let z = -1000;
+    let y = !x;
+    let z = -1000;
+    let y = !x;
+    }
+    ";
+        let expected = vec![Statement::Expression(Box::new(Expr::If {
+            condition: Box::new(Expr::Prefix { prefix: Token::Bang, value: Box::new(Expr::Ident("x".to_string())) }),
+            consequence: vec![
+                Statement::Let {
+                    ident: Token::Identifier("z".to_string()),
+                    value: Box::new(Expr::Ident("y".to_string())),
+                },
+                Statement::Let {
+                    ident: Token::Identifier("y".to_string()),
+                    value: Box::new(Expr::Ident("x".to_string())),
+                },
+                Statement::Let {
+                    ident: Token::Identifier("z".to_string()),
+                    value: Box::new(Expr::Prefix { prefix: Token::Minus, value: Box::new(Expr::Const(1000)) }),
+                },
+                Statement::Let {
+                    ident: Token::Identifier("y".to_string()),
+                    value: Box::new(Expr::Prefix {
+                        prefix: Token::Bang,
+                        value: Box::new(Expr::Ident("x".to_string())),
+                    }),
+                },
+            ],
+            alternative: vec![
+                Statement::Let {
+                    ident: Token::Identifier("z".to_string()),
+                    value: Box::new(Expr::Prefix { prefix: Token::Minus, value: Box::new(Expr::Const(1000)) }),
+                },
+                Statement::Let {
+                    ident: Token::Identifier("y".to_string()),
+                    value: Box::new(Expr::Prefix {
+                        prefix: Token::Bang,
+                        value: Box::new(Expr::Ident("x".to_string())),
+                    }),
+                },
+                Statement::Let {
+                    ident: Token::Identifier("z".to_string()),
+                    value: Box::new(Expr::Prefix { prefix: Token::Minus, value: Box::new(Expr::Const(1000)) }),
+                },
+                Statement::Let {
+                    ident: Token::Identifier("y".to_string()),
+                    value: Box::new(Expr::Prefix {
+                        prefix: Token::Bang,
+                        value: Box::new(Expr::Ident("x".to_string())),
+                    }),
+                },
+            ],
+        }))];
+        let mut parser = Parser::new(code);
 
-    //assert_eq!(parser.parse(), Ok(expected));
-    //}
+        assert_eq!(parser.parse(), Ok(expected));
+    }
 
     #[test]
     fn parses_prefix_expression() {
